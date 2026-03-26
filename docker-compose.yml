@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    container_name: mi_db_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: kurt
+      POSTGRES_PASSWORD: Kurt1697
+      POSTGRES_DB: core-admin-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
