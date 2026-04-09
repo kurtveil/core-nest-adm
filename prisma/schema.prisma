@@ -35,7 +35,7 @@ model Product {
 model Project {
   id          Int      @id @default(autoincrement())
   name        String
-  description String?
+  description String
   type        String
   users       User[]
   products    Product[]
