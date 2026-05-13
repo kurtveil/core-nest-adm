@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { RegisterUserDto } from './dto/register.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { OAuth2Client } from 'google-auth-library';
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 @Injectable()
 export class AuthService {
@@ -21,7 +23,7 @@ export class AuthService {
         },
       });
       return user;
-      
+
     } catch (error) {
       if (error.code === 'P2002') {
         throw new ConflictException('Este correo electrónico ya está registrado.'); // Envía un 409
@@ -45,4 +47,13 @@ export class AuthService {
       access_token: await this.jwtService.signAsync(payload),
     };
   }
+
+  async verifyGoogleToken(token: string) {
+  const ticket = await client.verifyIdToken({
+    idToken: token,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+  return ticket.getPayload(); // Retorna email, nombre, foto, etc.
+}
+ 
 }
