@@ -1,59 +1,123 @@
-import { ConflictException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import * as bcrypt from 'bcrypt';
-import { RegisterUserDto } from './dto/register.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { OAuth2Client } from 'google-auth-library';
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+import { RegisterUserDto } from './dto/register.dto';
+
+interface AuthResult {
+  accessToken: string;
+  user: { id: number; email: string; name: string; role: string; avatarUrl: string | null };
+}
 
 @Injectable()
 export class AuthService {
+  private readonly googleClient: OAuth2Client;
 
-  constructor(private jwtService: JwtService, private prisma: PrismaService) { }
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.googleClient = new OAuth2Client(
+      this.configService.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+    );
+  }
 
   async register(data: RegisterUserDto) {
     try {
       const hashedPassword = await bcrypt.hash(data.password, 10);
-
-      const user = await this.prisma.user.create({
-        data: {
-          email: data.email,
-          password: hashedPassword, // Asegúrate de tener este campo en tu schema.prisma
-          name: data.name || null,
-        },
+      return await this.prisma.user.create({
+        data: { email: data.email, password: hashedPassword, name: data.name },
       });
-      return user;
-
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new ConflictException('Este correo electrónico ya está registrado.'); // Envía un 409
-      }
-      // 2. Otros errores (Base de datos caída, etc)
-      throw new InternalServerErrorException('Error al crear el usuario. Inténtalo más tarde.'); // Envía un 500
+      if (error) throw new ConflictException('Este correo electrónico ya está registrado.');
+      throw new InternalServerErrorException('Error al crear el usuario. Inténtalo más tarde.');
     }
   }
 
-  async login(data: RegisterUserDto): Promise<any> {
+  async login(data: RegisterUserDto): Promise<AuthResult> {
     const user = await this.prisma.user.findUnique({ where: { email: data.email } });
-    if (!user) {
-      return new UnauthorizedException('Credenciales invalidas');
+    if (!user) throw new UnauthorizedException('Credenciales inválidas');
+    if (!user.password) {
+      throw new UnauthorizedException('Esta cuenta usa inicio de sesión con Google');
+    }
+    if (!(await bcrypt.compare(data.password, user.password))) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+    return this.createSession(user);
+  }
+
+  async loginWithGoogle(credential: string): Promise<AuthResult> {
+    let payload: TokenPayload | undefined;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: credential,
+        audience: this.configService.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('La credencial de Google no es válida o expiró');
     }
 
-    const isMatch = await bcrypt.compare(data.password, user.password);
-    if (!isMatch) return new UnauthorizedException('Password incorrecto');
+    if (!payload?.sub || !payload.email || !payload.email_verified) {
+      throw new UnauthorizedException('Google no pudo verificar este correo electrónico');
+    }
 
-    const payload = { sub: user.id, email: user.email };
+    const byGoogleId = await this.prisma.user.findUnique({ where: { googleId: payload.sub } });
+    const byEmail = byGoogleId
+      ? null
+      : await this.prisma.user.findUnique({ where: { email: payload.email } });
+
+    const user = byGoogleId
+      ? await this.prisma.user.update({
+          where: { id: byGoogleId.id },
+          data: { avatarUrl: payload.picture ?? byGoogleId.avatarUrl },
+        })
+      : byEmail
+        ? await this.prisma.user.update({
+            where: { id: byEmail.id },
+            data: { googleId: payload.sub, avatarUrl: payload.picture ?? byEmail.avatarUrl },
+          })
+        : await this.prisma.user.create({
+            data: {
+              email: payload.email,
+              name: payload.name ?? payload.email.split('@')[0],
+              googleId: payload.sub,
+              avatarUrl: payload.picture ?? null,
+            },
+          });
+
+    return this.createSession(user);
+  }
+
+  private async createSession(user: {
+    id: number;
+    email: string;
+    name: string;
+    role: string;
+    avatarUrl: string | null;
+  }): Promise<AuthResult> {
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        avatarUrl: user.avatarUrl,
+      },
     };
   }
-
-  async verifyGoogleToken(token: string) {
-  const ticket = await client.verifyIdToken({
-    idToken: token,
-    audience: process.env.GOOGLE_CLIENT_ID,
-  });
-  return ticket.getPayload(); // Retorna email, nombre, foto, etc.
-}
- 
 }
