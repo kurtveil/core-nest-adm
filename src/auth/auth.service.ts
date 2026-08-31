@@ -10,6 +10,7 @@ import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterUserDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 interface AuthResult {
   accessToken: string;
@@ -42,7 +43,7 @@ export class AuthService {
     }
   }
 
-  async login(data: RegisterUserDto): Promise<AuthResult> {
+  async login(data: LoginDto): Promise<AuthResult> {
     const user = await this.prisma.user.findUnique({ where: { email: data.email } });
     if (!user) throw new UnauthorizedException('Credenciales inválidas');
     if (!user.password) {

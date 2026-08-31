@@ -5,7 +5,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import cookieParser = require('cookie-parser');
 import { ValidationPipe } from '@nestjs/common';
-  
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   // Lista de dominios permitidos (Local y Producción)
@@ -30,6 +30,9 @@ async function bootstrap() {
     methods: 'GET, HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-  await app.listen(process.env.PORT || 3001);
+  const port = Number(process.env.PORT) || 3001;
+  await app.listen(port, '0.0.0.0');
+  console.log(`Application running on port ${port}`);
+
 }
 bootstrap();

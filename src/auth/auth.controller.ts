@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { GoogleLoginDto } from './dto/google-login.dto';
 import { RegisterUserDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -14,7 +15,7 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() data: RegisterUserDto, @Res({ passthrough: true }) response: Response) {
+  async login(@Body() data: LoginDto, @Res({ passthrough: true }) response: Response) {
     const result = await this.authService.login(data);
     this.setSessionCookie(response, result.accessToken);
     return { message: 'Login exitoso', user: result.user };
