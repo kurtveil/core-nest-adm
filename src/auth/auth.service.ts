@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterUserDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { env } from 'process';
 
 interface AuthResult {
   accessToken: string;
@@ -27,7 +28,7 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {
     this.googleClient = new OAuth2Client(
-      this.configService.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+      this.configService.getOrThrow<string>(env.GOOGLE_CLIENT_ID),
     );
   }
 
@@ -60,7 +61,7 @@ export class AuthService {
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken: credential,
-        audience: this.configService.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+        audience: this.configService.getOrThrow<string>(env.GOOGLE_CLIENT_ID),
       });
       payload = ticket.getPayload();
     } catch {
