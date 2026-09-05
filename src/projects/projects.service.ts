@@ -8,7 +8,7 @@ export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
   async create(createProjectDto: CreateProjectDto) {
-    return this.prisma.project.create({data: createProjectDto});
+    return this.prisma.project.create({ data: createProjectDto });
   }
 
   async findAll() {
@@ -17,18 +17,18 @@ export class ProjectsService {
 
   async findOne(id: number) {
     return this.prisma.project.findUnique({
-      where: {id}
-    })
+      where: { id },
+    });
   }
 
   async update(id: number, updateProjectDto: UpdateProjectDto) {
     return await this.prisma.project.update({
-      where: {id},
-      data: updateProjectDto
+      where: { id },
+      data: updateProjectDto,
     });
   }
 
   async remove(id: number) {
-    return this.prisma.project.delete({where: {id: id}})
+    return this.prisma.project.delete({ where: { id: id } });
   }
 }
